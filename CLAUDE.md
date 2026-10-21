@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-A teaching exercise (README is in Spanish) on **LSP** and **ISP** using a fictional "OfiDocs" office system. The starting code is intentionally flawed: it works and all 19 tests pass, but the clients are written defensively to hide design problems. The task is to refactor the design, not to add features.
+A teaching exercise (README is in Spanish) on **LSP** and **ISP** using a fictional "OfiDocs" office system. The starting code was intentionally flawed (clients written defensively to hide design problems); the refactor has since been applied. All 19 tests must stay green.
 
 ## Commands
 
@@ -12,16 +12,16 @@ A teaching exercise (README is in Spanish) on **LSP** and **ISP** using a fictio
 - `npx vitest run test/archive-service.test.ts`: run a single test file
 - `npx vitest run -t "<test name>"`: run tests matching a name
 - `npm run typecheck`: `tsc --noEmit` (covers `src` and `test`)
-- `npm run demo`: run `src/demo.ts` via tsx; its last line currently shows the LSP bug (archive says it purged a document that is still there)
+- `npm run demo`: run `src/demo.ts` via tsx
 
 Node >= 22, ESM (`"type": "module"`); imports use explicit `.ts` extensions.
 
 ## Architecture
 
-Two independent halves, each with an abstraction plus a "client" that consumes it:
+The refactor is applied. Two independent halves, each with abstractions plus a "client" that consumes them:
 
-- **Devices (ISP):** `src/devices/office-device.ts` defines one fat `OfficeDevice` interface (`getStatus`, `print`, `scan`, `fax`, `staple`, `refillToner`) and `UnsupportedOperationError`. `MultifunctionPrinter`, `BasicInkjetPrinter` and `NetworkScanner` implement it, throwing `UnsupportedOperationError` for what they can't do. The client `src/office-workflow.ts` discovers capabilities with `try/catch`, and `capabilitiesReport()` uses `instanceof` per concrete class.
-- **Storage (LSP):** `src/storage/document-storage.ts` is an abstract class whose header comment documents the contract (save accepts any valid document, remove returns true only if actually deleted, etc.). `LocalDiskStorage`, `ObjectBucketStorage` and `ReadOnlyArchiveStorage` subclass it; two violate the contract (a strengthened precondition and a weakened postcondition). The client `src/archive-service.ts` compensates with `instanceof`, name normalization, and manual post-checks in `purge()`.
+- **Devices (ISP):** `src/devices/office-device.ts` defines a minimal `OfficeDevice` (`id`, `model`, `getStatus`) plus one interface per capability (`Printer`, `Scanner`, `FaxSender`, `Stapler`, `TonerRefillable`) with `is*` type guards. `MultifunctionPrinter` implements all of them, `BasicInkjetPrinter` only `Printer`, `NetworkScanner` only `Scanner`. `OfficeWorkflow` picks devices with the type guards; `capabilitiesReport()` derives labels from them.
+- **Storage (LSP):** `src/storage/document-storage.ts` defines `ReadableStorage` (`load`, `listIds`) and `WritableStorage` (`save`, `remove`, with the documented contract), the `isWritableStorage` guard, and the `DocumentStorage` base class for writable stores. `ReadOnlyArchiveStorage` only implements `ReadableStorage`; `ObjectBucketStorage` normalizes its own keys. `ArchiveService` accepts `ReadableStorage[]` and writes only to writable ones.
 
 Shared types are in `src/types.ts`.
 

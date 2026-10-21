@@ -41,19 +41,28 @@ npm run demo      # digitaliza, imprime, archiva y purga
 src/
   types.ts
   devices/
-    office-device.ts            Interfaz común de TODOS los aparatos
-    multifunction-printer.ts    Imprime, escanea, faxea, grapa
-    basic-inkjet-printer.ts     Solo imprime
-    network-scanner.ts          Solo escanea
+    office-device.ts            OfficeDevice mínima + interfaces por capacidad
+                                (Printer, Scanner, FaxSender, Stapler,
+                                TonerRefillable) y sus type guards
+    multifunction-printer.ts    Implementa las cinco capacidades
+    basic-inkjet-printer.ts     Solo Printer
+    network-scanner.ts          Solo Scanner
   storage/
-    document-storage.ts         Clase base con el CONTRATO documentado
+    document-storage.ts         ReadableStorage, WritableStorage (con el
+                                CONTRATO documentado) y la base DocumentStorage
     local-disk-storage.ts
-    object-bucket-storage.ts
-    read-only-archive-storage.ts
+    object-bucket-storage.ts    Normaliza sus propias claves
+    read-only-archive-storage.ts  Solo ReadableStorage: no expone escritura
   office-workflow.ts            ⟵ Cliente de los aparatos
   archive-service.ts            ⟵ Cliente de los almacenes
   demo.ts
 ```
+
+> **Estado:** el rediseño de ambas partes ya está aplicado. `UnsupportedOperationError`
+> se ha eliminado, `OfficeWorkflow` selecciona aparatos con type guards,
+> `ArchiveService` no usa `instanceof` y `capabilitiesReport()` deduce las
+> capacidades de las interfaces. Las secciones siguientes conservan el
+> enunciado original del ejercicio.
 
 ---
 
