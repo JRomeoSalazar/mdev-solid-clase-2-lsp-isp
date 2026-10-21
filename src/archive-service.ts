@@ -1,6 +1,8 @@
-import { ObjectBucketStorage } from './storage/object-bucket-storage.ts'
-import { ReadOnlyArchiveStorage } from './storage/read-only-archive-storage.ts'
-import type { DocumentStorage } from './storage/document-storage.ts'
+import {
+  isWritableStorage,
+  type ReadableStorage,
+  type WritableStorage,
+} from './storage/document-storage.ts'
 import type { OfficeDocument } from './types.ts'
 
 export interface ArchiveResult {
@@ -9,33 +11,25 @@ export interface ArchiveResult {
 }
 
 /**
- * Replica cada documento en todos los almacenes configurados y se encarga de
- * las purgas por retención de datos.
+ * Replica cada documento en todos los almacenes escribibles y se encarga de
+ * las purgas por retención de datos. Los almacenes de solo lectura se
+ * consultan, pero nunca se modifican.
  */
 export class ArchiveService {
-  constructor(private readonly storages: DocumentStorage[]) {}
+  constructor(private readonly storages: ReadableStorage[]) {}
 
   archive(document: OfficeDocument): ArchiveResult {
     const savedIn: string[] = []
     const skipped: string[] = []
 
     for (const storage of this.storages) {
-      // El archivo histórico hereda de DocumentStorage, pero si le llamas a
-      // save() revienta. Hay que apartarlo a mano antes de intentarlo.
-      if (storage instanceof ReadOnlyArchiveStorage) {
+      if (!isWritableStorage(storage)) {
         skipped.push(storage.name)
         continue
       }
 
-      // Y el bucket rechaza nombres con espacios o largos, así que le
-      // preparamos una versión del documento hecha a su medida.
-      let candidate = document
-      if (storage instanceof ObjectBucketStorage) {
-        candidate = { ...document, name: document.name.replace(/\s+/g, '_').slice(0, 60) }
-      }
-
       try {
-        storage.save(candidate)
+        storage.save(document)
         savedIn.push(storage.name)
       } catch {
         skipped.push(storage.name)
@@ -46,18 +40,9 @@ export class ArchiveService {
   }
 
   purge(id: string): string[] {
-    const removedFrom: string[] = []
-
-    for (const storage of this.storages) {
-      const removed = storage.remove(id)
-      // No nos fiamos del valor devuelto: hay almacenes que dicen que sí han
-      // borrado y luego el documento sigue ahí. Lo comprobamos nosotros.
-      if (removed && storage.load(id) === null) {
-        removedFrom.push(storage.name)
-      }
-    }
-
-    return removedFrom
+    return this.writableStorages()
+      .filter((storage) => storage.remove(id))
+      .map((storage) => storage.name)
   }
 
   findDocument(id: string): OfficeDocument | null {
@@ -66,5 +51,9 @@ export class ArchiveService {
       if (found !== null) return found
     }
     return null
+  }
+
+  private writableStorages(): WritableStorage[] {
+    return this.storages.filter(isWritableStorage)
   }
 }
